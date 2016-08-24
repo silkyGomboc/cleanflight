@@ -144,7 +144,14 @@ PG_REGISTER(pwmRxConfig_t, pwmRxConfig, PG_DRIVER_PWM_RX_CONFIG, 0);
 PG_RESET_TEMPLATE(systemConfig_t, systemConfig,
     .i2c_highspeed = 1,
 );
-
+#ifdef CUSTOM_FLASHCHIP
+PG_REGISTER(flashchipConfig_t, flashchipConfig, PG_DRIVER_FLASHCHIP_CONFIG, 0);
+PG_RESET_TEMPLATE(flashchipConfig_t, flashchipConfig,
+    .flashchip_id = 0,
+    .flashchip_nsect = 0,
+    .flashchip_pps = 0,
+);
+#endif
 
 typedef enum {
     SYSTEM_STATE_INITIALISING        = 0,
@@ -349,14 +356,13 @@ void init(void)
 
 #ifdef SONAR
     const sonarHardware_t *sonarHardware = NULL;
-
+    sonarGPIOConfig_t sonarGPIOConfig;
     if (feature(FEATURE_SONAR)) {
         sonarHardware = sonarGetHardwareConfiguration(batteryConfig()->currentMeterType);
-        sonarGPIOConfig_t sonarGPIOConfig = {
-            .gpio = SONAR_GPIO,
-            .triggerPin = sonarHardware->echo_pin,
-            .echoPin = sonarHardware->trigger_pin,
-        };
+        sonarGPIOConfig.triggerGPIO = sonarHardware->trigger_gpio;
+        sonarGPIOConfig.triggerPin = sonarHardware->trigger_pin;
+        sonarGPIOConfig.echoGPIO = sonarHardware->echo_gpio;
+        sonarGPIOConfig.echoPin = sonarHardware->echo_pin;
         pwm_params.sonarGPIOConfig = &sonarGPIOConfig;
     }
 #endif

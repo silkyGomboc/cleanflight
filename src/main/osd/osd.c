@@ -29,6 +29,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 #include <platform.h>
 #include "build/debug.h"
@@ -36,18 +37,10 @@
 #include "config/parameter_group.h"
 #include "config/parameter_group_ids.h"
 
-#include "common/printf.h"
 #include "common/maths.h"
 #include "common/utils.h"
 
-#include "fc/rc_controls.h" // FIXME dependency on FC code for throttle status
-
-#include "sensors/battery.h"
-
-#include "drivers/adc.h"
 #include "drivers/system.h"
-#include "drivers/gpio.h"
-#include "drivers/light_led.h"
 #include "drivers/video.h"
 #include "drivers/video_textscreen.h"
 
@@ -56,89 +49,45 @@
 #include "osd/fc_state.h"
 #include "osd/msp_client_osd.h"
 
+#include "osd/osd_screen.h"
+#include "osd/osd_element.h"
 #include "osd/osd.h"
 
 PG_REGISTER(osdFontConfig_t, osdFontConfig, PG_OSD_FONT_CONFIG, 0);
 PG_REGISTER_WITH_RESET_TEMPLATE(osdVideoConfig_t, osdVideoConfig, PG_OSD_VIDEO_CONFIG, 0);
 
+PG_REGISTER_WITH_RESET_FN(osdElementConfig_t, osdElementConfig, PG_OSD_ELEMENT_CONFIG, 0);
+
 #ifndef DEFAULT_VIDEO_MODE
-// the reason for the NTSC default is that there are probably more NTSC capable screens than PAL in the world.
-// Also most PAL screens can also display NTSC but not vice-versa.  PAL = more lines, less FPS.  NTSC = fewer lines, more FPS.
-#define DEFAULT_VIDEO_MODE VIDEO_NTSC
+#define DEFAULT_VIDEO_MODE VIDEO_AUTO
 #endif
 
 PG_RESET_TEMPLATE(osdVideoConfig_t, osdVideoConfig,
     .videoMode = DEFAULT_VIDEO_MODE,
 );
 
-textScreen_t osdTextScreen;
 
-typedef struct osdCursor_s {
-    uint8_t x;
-    uint8_t y;
-} osdCursor_t;
+static const element_t osdDefaultElements[] = {
+    {  2,  1, EF_ENABLED | EF_FLASH_ON_DISCONNECT, OSD_ELEMENT_RSSI_FC },
+    { 20,  1, EF_ENABLED | EF_FLASH_ON_DISCONNECT, OSD_ELEMENT_INDICATOR_MAG },
+    { 22,  1, EF_ENABLED | EF_FLASH_ON_DISCONNECT, OSD_ELEMENT_INDICATOR_BARO },
+    { 24,  1, EF_ENABLED | EF_FLASH_ON_DISCONNECT, OSD_ELEMENT_FLIGHT_MODE },
+    {  7, -4, EF_ENABLED, OSD_ELEMENT_ON_DURATION },
+    { 18, -4, EF_ENABLED, OSD_ELEMENT_ARMED_DURATION },
+    {  2, -3, EF_ENABLED, OSD_ELEMENT_VOLTAGE_12V },
+    { 18, -3, EF_ENABLED, OSD_ELEMENT_VOLTAGE_BATTERY },
+    {  2, -2, EF_ENABLED, OSD_ELEMENT_VOLTAGE_5V },
+    { 18, -2, EF_ENABLED | EF_FLASH_ON_DISCONNECT, OSD_ELEMENT_VOLTAGE_BATTERY_FC },
+    {  2, -1, EF_ENABLED, OSD_ELEMENT_AMPERAGE },
+    { 18, -1, EF_ENABLED, OSD_ELEMENT_MAH_DRAWN },
+};
 
-static osdCursor_t cursor = {0, 0};
-
-// Does not move the cursor.
-void osdSetCharacterAtPosition(uint8_t x, uint8_t y, char c)
-{
-    uint8_t mappedCharacter = asciiToFontMapping[(uint8_t)c];
-
-    unsigned int offset = (y * osdTextScreen.width) + x;
-    textScreenBuffer[offset] = mappedCharacter;
+void pgResetFn_osdElementConfig(osdElementConfig_t *osdElementConfig) {
+    memset(osdElementConfig, 0, sizeof(osdElementConfig_t));
+    memcpy_fn(&osdElementConfig->elements, &osdDefaultElements, sizeof(osdDefaultElements));
 }
 
-// Does not move the cursor.
-void osdSetRawCharacterAtPosition(uint8_t x, uint8_t y, char c)
-{
-    unsigned int offset = (y * osdTextScreen.width) + x;
-    textScreenBuffer[offset] = c;
-}
-
-void osdResetCursor(void)
-{
-    cursor.x = 0;
-    cursor.y = 0;
-}
-
-void osdSetCursor(uint8_t x, uint8_t y)
-{
-    cursor.x = x;
-    cursor.y = y;
-}
-
-// software cursor, handles line wrapping and row wrapping, resets to 0,0 when the end of the screen is reached
-static void osdAdvanceCursor(void)
-{
-    cursor.x++;
-    if (cursor.x >= osdTextScreen.width) {
-        cursor.y++;
-        cursor.x = 0;
-        if (cursor.y > osdTextScreen.height) {
-            cursor.y = 0;
-        }
-    }
-}
-
-void osdPrint(char *message)
-{
-    char *charPtr = message;
-
-    while(*charPtr) {
-        osdSetCharacterAtPosition(cursor.x, cursor.y, *charPtr);
-        osdAdvanceCursor();
-
-        charPtr++;
-    }
-}
-
-void osdPrintAt(uint8_t x, uint8_t y, char *message)
-{
-    osdSetCursor(x, y);
-    osdPrint(message);
-}
-
+osdState_t osdState;
 
 void osdDisplaySplash(void)
 {
@@ -147,25 +96,10 @@ void osdDisplaySplash(void)
     osdPrintAt(10, 7, "CLEANFLIGHT");
 }
 
-void osdSetTextScreen(textScreen_t *textScreen)
-{
-    osdTextScreen = *textScreen;
-}
-
-void osdClearScreen(void)
-{
-    uint8_t mappedSpaceCharacter = asciiToFontMapping[(uint8_t)' '];
-
-    int offset = 0;
-    for (int y = 0; y < osdTextScreen.height; y++) {
-        for (int x = 0; x < osdTextScreen.width; x++) {
-            textScreenBuffer[offset++] = mappedSpaceCharacter;
-        }
-    }
-}
-
 void osdInit(void)
 {
+    memset(&osdState, 0, sizeof(osdState));
+
     osdHardwareInit();
 
     osdClearScreen();
@@ -176,7 +110,7 @@ void osdInit(void)
 
 void osdApplyConfiguration(void)
 {
-    osdHardwareApplyConfiguration();
+    osdHardwareApplyConfiguration(osdVideoConfig()->videoMode);
 }
 
 #define OSD_HZ(hz) ((int32_t)((1000 * 1000) / (hz)))
@@ -221,6 +155,11 @@ struct quadMotorCoordinateOffset_s {
     {0, 1}
 };
 
+bool osdIsCameraConnected(void)
+{
+    return osdState.cameraConnected;
+}
+
 void osdDisplayMotors(void)
 {
     const int maxMotors = 4; // just quad for now
@@ -236,13 +175,31 @@ void osdDisplayMotors(void)
 
 void osdUpdate(void)
 {
-    char lineBuffer[31];
-
     TIME_SECTION_BEGIN(0);
+
+    uint32_t now = micros();
+
+    static bool armed = false;
+    static uint32_t armedAt = 0;
+
+    bool armedNow = fcStatus.fcState & (1 << FC_STATE_ARM);
+    if (armed != armedNow) {
+        if (armedNow) {
+            armedAt = now;
+        }
+
+        armed = armedNow;
+    }
+
+    if (armed) {
+        if (now > armedAt) {
+
+            fcStatus.armedDuration = (now - armedAt) / 1000;
+        }
+    }
 
     osdClearScreen();
 
-    uint32_t now = micros();
 
     // test all timers, setting corresponding bits
     uint32_t timActive = 0;
@@ -272,40 +229,13 @@ void osdUpdate(void)
 
     bool showNowOrFlashWhenFCTimeoutOccured = !mspClientStatus.timeoutOccured || (mspClientStatus.timeoutOccured && timerState[tim10Hz].toggle);
 
-    //
-    // top
-    //
+    osdSetElementFlashOnDisconnectState(showNowOrFlashWhenFCTimeoutOccured);
 
-    int row = 1; // zero based.
+    for (uint8_t elementIndex = 0; elementIndex < MAX_OSD_ELEMENT_COUNT; elementIndex++) {
+        element_t *element = &osdElementConfig()->elements[elementIndex];
 
-    if (showNowOrFlashWhenFCTimeoutOccured) {
-        tfp_sprintf(lineBuffer, "RSSI:%3d%%", fcStatus.rssi / 10);
-        osdPrintAt(2, row, lineBuffer);
+        osdDrawTextElement(element);
     }
-
-    char *flightMode;
-    if (fcStatus.fcState & (1 << FC_STATE_ANGLE)) {
-        flightMode = "ANGL";
-    } else if (fcStatus.fcState & (1 << FC_STATE_HORIZON)) {
-        flightMode = "HORI";
-    } else if (fcStatus.fcState & (1 << FC_STATE_ARM)) {
-        flightMode  = "ACRO";
-    } else  {
-        flightMode  = " OFF";
-    }
-
-    if (showNowOrFlashWhenFCTimeoutOccured) {
-        tfp_sprintf(lineBuffer, "%1s %1s %4s",
-            fcStatus.fcState & (1 << FC_STATE_MAG) ? "M" : "",
-            fcStatus.fcState & (1 << FC_STATE_BARO) ? "B" : "",
-            flightMode
-        );
-        osdPrintAt(20, row, lineBuffer);
-    }
-
-    //
-    // middle
-    //
 
     //
     // flash the logo for a few seconds
@@ -331,38 +261,6 @@ void osdUpdate(void)
             osdPrintAt(11, 4, "NO CAMERA");
         }
     }
-
-    //
-    // bottom
-    //
-
-    row = osdTextScreen.height - 3;
-
-    uint8_t voltage12v = batteryAdcToVoltage(adcGetChannel(ADC_POWER_12V));
-    tfp_sprintf(lineBuffer, "12V:%3d.%dV", voltage12v / 10, voltage12v % 10);
-    osdPrintAt(2, row, lineBuffer);
-
-    tfp_sprintf(lineBuffer, "BAT:%3d.%dV", vbat / 10, vbat % 10);
-    osdPrintAt(18, row, lineBuffer);
-
-    row++;
-
-    uint8_t voltage5v = batteryAdcToVoltage(adcGetChannel(ADC_POWER_5V));
-    tfp_sprintf(lineBuffer, " 5V:%3d.%dV", voltage5v / 10, voltage5v % 10);
-    osdPrintAt(2, row, lineBuffer);
-
-    if (showNowOrFlashWhenFCTimeoutOccured) {
-        tfp_sprintf(lineBuffer, " FC:%3d.%dV", fcStatus.vbat / 10, fcStatus.vbat % 10);
-        osdPrintAt(18, row, lineBuffer);
-    }
-
-    row++;
-
-    tfp_sprintf(lineBuffer, "AMP:%2d.%02dA", amperage / 100, amperage % 100);
-    osdPrintAt(2, row, lineBuffer);
-    tfp_sprintf(lineBuffer, "mAh:%5d", mAhDrawn);
-    osdPrintAt(18, row, lineBuffer);
-
 
     osdDisplayMotors();
 

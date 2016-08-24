@@ -149,7 +149,7 @@ INCLUDE_DIRS := $(INCLUDE_DIRS) \
 LD_SCRIPT	 = $(LINKER_DIR)/stm32_flash_f103_$(FLASH_SIZE)k.ld
 
 ARCH_FLAGS	 = -mthumb -mcpu=cortex-m3
-TARGET_FLAGS = -D$(TARGET) -pedantic
+TARGET_FLAGS = -D$(TARGET)
 DEVICE_FLAGS = -DSTM32F10X_HD -DSTM32F10X
 
 DEVICE_STDPERIPH_SRC = $(STDPERIPH_SRC)
@@ -194,7 +194,7 @@ endif
 LD_SCRIPT	 = $(LINKER_DIR)/stm32_flash_f103_$(FLASH_SIZE)k.ld
 
 ARCH_FLAGS	 = -mthumb -mcpu=cortex-m3
-TARGET_FLAGS = -D$(TARGET) -pedantic
+TARGET_FLAGS = -D$(TARGET)
 DEVICE_FLAGS = -DSTM32F10X_MD -DSTM32F10X
 
 endif #TARGETS
@@ -321,6 +321,9 @@ OSD_COMMON_SRC = \
 		   osd/fc_state.c \
 		   osd/config.c \
 		   osd/osd.c \
+		   osd/osd_screen.c \
+		   osd/osd_element.c \
+		   osd/osd_element_render.c \
 		   osd/osd_serial.c \
 		   osd/msp_server_osd.c \
 		   osd/msp_client_osd.c \
@@ -842,7 +845,7 @@ CFLAGS		 = $(ARCH_FLAGS) \
 		   $(addprefix -I,$(INCLUDE_DIRS)) \
 		   $(DEBUG_FLAGS) \
 		   -std=gnu99 \
-		   -Wall -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion -Wundef \
+		   -Wall -Wpedantic -Wextra -Wunsafe-loop-optimizations -Wdouble-promotion -Wundef \
 		   -ffunction-sections \
 		   -fdata-sections \
 		   $(DEVICE_FLAGS) \

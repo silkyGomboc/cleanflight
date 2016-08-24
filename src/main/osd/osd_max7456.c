@@ -49,64 +49,66 @@
 #include "drivers/video_max7456.h"
 
 #include "osd/config.h"
+#include "osd/osd_element.h"
+#include "osd/osd_screen.h"
 
 #include "osd/fonts/font_max7456_12x18.h"
 
 #include "osd/osd.h"
 
 
-char textScreenBuffer[MAX7456_PAL_CHARACTER_COUNT]; // PAL has more characters than NTSC.
+TEXT_SCREEN_CHAR textScreenBuffer[MAX7456_PAL_CHARACTER_COUNT]; // PAL has more characters than NTSC.
 const uint8_t *asciiToFontMapping = &font_max7456_12x18_asciiToFontMapping[0];
 
 #ifdef STM32F303
 static const extiConfig_t max7456LOSExtiConfig = {
-        .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,
-        .gpioPort = GPIOC,
-        .gpioPin = Pin_13,
-        .io = IO_TAG(PC13),
+        .gpioAHBPeripherals = MAX7456_LOS_GPIO_PERIPHERAL,
+        .gpioPort = MAX7456_LOS_GPIO,
+        .gpioPin = MAX7456_LOS_PIN,
+        .io = IO_TAG(MAX7456_LOS_IO),
 };
 
 static const extiConfig_t max7456VSYNCExtiConfig = {
-        .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,
-        .gpioPort = GPIOC,
-        .gpioPin = Pin_14,
-        .io = IO_TAG(PC14),
+        .gpioAHBPeripherals = MAX7456_VSYNC_GPIO_PERIPHERAL,
+        .gpioPort = MAX7456_VSYNC_GPIO,
+        .gpioPin = MAX7456_VSYNC_PIN,
+        .io = IO_TAG(MAX7456_VSYNC_IO),
 };
 
 static const extiConfig_t max7456HSYNCExtiConfig = {
-        .gpioAHBPeripherals = RCC_AHBPeriph_GPIOC,
-        .gpioPort = GPIOC,
-        .gpioPin = Pin_15,
-        .io = IO_TAG(PC15),
+        .gpioAHBPeripherals = MAX7456_HSYNC_GPIO_PERIPHERAL,
+        .gpioPort = MAX7456_HSYNC_GPIO,
+        .gpioPin = MAX7456_HSYNC_PIN,
+        .io = IO_TAG(MAX7456_HSYNC_IO),
 };
 #endif
 
 #ifdef STM32F10X
 static const extiConfig_t max7456LOSExtiConfig = {
-        .gpioAPB2Peripherals = RCC_APB2Periph_GPIOC,
-        .gpioPort = GPIOC,
-        .gpioPin = Pin_13,
-        .io = IO_TAG(PC13),
+        .gpioAPB2Peripherals = MAX7456_LOS_GPIO_PERIPHERAL,
+        .gpioPort = MAX7456_LOS_GPIO,
+        .gpioPin = MAX7456_LOS_PIN,
+        .io = IO_TAG(MAX7456_LOS_IO),
 };
 
 static const extiConfig_t max7456VSYNCExtiConfig = {
-        .gpioAPB2Peripherals = RCC_APB2Periph_GPIOC,
-        .gpioPort = GPIOC,
-        .gpioPin = Pin_14,
-        .io = IO_TAG(PC14),
+        .gpioAPB2Peripherals = MAX7456_VSYNC_GPIO_PERIPHERAL,
+        .gpioPort = MAX7456_VSYNC_GPIO,
+        .gpioPin = MAX7456_VSYNC_PIN,
+        .io = IO_TAG(MAX7456_VSYNC_IO),
 };
 
 static const extiConfig_t max7456HSYNCExtiConfig = {
-        .gpioAPB2Peripherals = RCC_APB2Periph_GPIOC,
-        .gpioPort = GPIOC,
-        .gpioPin = Pin_15,
-        .io = IO_TAG(PC15),
+        .gpioAPB2Peripherals = MAX7456_HSYNC_GPIO_PERIPHERAL,
+        .gpioPort = MAX7456_HSYNC_GPIO,
+        .gpioPin = MAX7456_HSYNC_PIN,
+        .io = IO_TAG(MAX7456_HSYNC_IO),
 };
 #endif
 
-void osdHardwareApplyConfiguration(void)
+void osdHardwareApplyConfiguration(videoMode_e videoMode)
 {
-    max7456_init(osdVideoConfig()->videoMode);
+    max7456_init(videoMode);
 
     textScreen_t *max7456TextScreen = max7456_getTextScreen();
     osdSetTextScreen(max7456TextScreen);
@@ -119,7 +121,7 @@ void osdHardwareInit(void)
     max7456_hardwareReset();
     LED0_OFF;
 
-    osdHardwareApplyConfiguration();
+    osdHardwareApplyConfiguration(osdVideoConfig()->videoMode);
 
     max7456_extiConfigure(&max7456LOSExtiConfig, &max7456VSYNCExtiConfig, &max7456HSYNCExtiConfig);
 
@@ -144,31 +146,47 @@ void osdHardwareInit(void)
 
 void osdHardwareUpdate(void)
 {
+    max7456_updateStatus();
 
-#if 0
-    debug[3] = max7456_readStatus();
-#endif
+    osdState.videoMode = max7456State.detectedVideoMode;
+    osdState.cameraConnected = !max7456State.los;
 
     max7456_writeScreen(&osdTextScreen, textScreenBuffer);
 }
 
 void osdHardwareCheck(void)
 {
+    videoMode_e desiredVideoMode = osdVideoConfig()->videoMode;
+    if (!max7456_isOSDEnabled()) {
+        max7456_init(desiredVideoMode);
+    }
+
+    max7456_updateStatus();
+
+    bool correctVideoMode = max7456State.configuredVideoMode == max7456State.detectedVideoMode;
+
+    if (correctVideoMode && !max7456State.los) {
+        max7456State.useSync = true;
+    } else {
+        max7456State.useSync = false;
+    }
+
+    if (!max7456State.los && max7456State.detectedVideoMode != VIDEO_AUTO) {
+        // there is a valid video mode
+        if (desiredVideoMode == VIDEO_AUTO && !correctVideoMode) {
+            osdHardwareApplyConfiguration(max7456State.detectedVideoMode);
+        };
+    }
+
+#ifdef FACTORY_TEST
     static int checkCount = 0;
 
     checkCount++;
 
-    if (!max7456_isOSDEnabled()) {
-        max7456_init(osdVideoConfig()->videoMode);
-    }
-
-#ifdef FACTORY_TEST
     if (checkCount == 10) {
-        max7456_init(osdVideoConfig()->videoMode);
+        max7456_init(desiredVideoMode);
     }
 #endif
-
-    max7456_updateLOSState();
 }
 
 static const uint8_t logoElement[] = {
@@ -205,8 +223,4 @@ void osdHardwareDisplayMotor(uint8_t x, uint8_t y, uint8_t percent)
     osdSetRawCharacterAtPosition(13 + x, osdTextScreen.height - 4 + y, c);
 }
 
-bool osdIsCameraConnected(void)
-{
-    return !max7456State.los;
-}
 

@@ -38,6 +38,7 @@
 #include "drivers/system.h"
 #include "drivers/serial.h"
 #include "drivers/video_textscreen.h"
+#include "drivers/video.h"
 
 #include "fc/rc_controls.h" // FIXME virtual current sensor needs it
 #include "sensors/battery.h"
@@ -53,6 +54,7 @@
 #include "scheduler/scheduler.h"
 
 #include "osd/config.h"
+#include "osd/osd_element.h"
 #include "osd/osd.h"
 #include "osd/osd_serial.h"
 #include "osd/msp_server_osd.h"
@@ -227,6 +229,11 @@ int mspServerCommandHandler(mspPacket_t *cmd, mspPacket_t *reply)
             break;
         case MSP_OSD_VIDEO_CONFIG:
             sbufWriteU8(dst, osdVideoConfig()->videoMode); // 0 = NTSC, 1 = PAL
+            break;
+
+        case MSP_OSD_VIDEO_STATUS:
+            sbufWriteU8(dst, osdState.videoMode);
+            sbufWriteU8(dst, osdState.cameraConnected);
             break;
 
         case MSP_RESET_CONF:

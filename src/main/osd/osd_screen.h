@@ -15,10 +15,21 @@
  * along with Cleanflight.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#define TEXT_SCREEN_CHAR uint8_t
 
-typedef enum {
-    VIDEO_AUTO = 0,
-    VIDEO_NTSC = 1,
-    VIDEO_PAL = 2
-} videoMode_e;
+extern textScreen_t osdTextScreen;
+extern TEXT_SCREEN_CHAR textScreenBuffer[];
+
+extern const uint8_t *asciiToFontMapping;
+
+typedef int8_t osdCoordVal_t;
+
+void osdSetTextScreen(textScreen_t *textScreen);
+void osdClearScreen(void);
+void osdResetCursor(void);
+void osdSetCursor(osdCoordVal_t x, osdCoordVal_t y);
+void osdPrint(char *message);
+void osdPrintAt(osdCoordVal_t x, osdCoordVal_t y, char *message);
+void osdSetCharacterAtPosition(osdCoordVal_t x, osdCoordVal_t y, char c);
+void osdSetRawCharacterAtPosition(osdCoordVal_t x, osdCoordVal_t y, char c);
+

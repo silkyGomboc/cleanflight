@@ -42,6 +42,7 @@
 #include "drivers/system.h"
 #include "drivers/serial.h"
 #include "drivers/video_textscreen.h"
+#include "drivers/video.h"
 
 #include "fc/rc_controls.h" // FIXME required due to virtual current meter.
 
@@ -56,6 +57,7 @@
 #include "osd/msp_server_osd.h"
 #include "osd/msp_client_osd.h"
 
+#include "osd/osd_element.h"
 #include "osd/osd.h"
 
 #include "osd/config.h"

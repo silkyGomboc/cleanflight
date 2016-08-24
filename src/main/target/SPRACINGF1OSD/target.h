@@ -38,6 +38,7 @@
 #define SPI2_CS_GPIO      GPIOB
 #define SPI2_CS_PIN       GPIO_Pin_12
 
+#define CUSTOM_FLASHCHIP
 #define M25P16_CS_GPIO        SPI1_CS_GPIO
 #define M25P16_CS_PIN         SPI1_CS_PIN
 #define M25P16_SPI_INSTANCE   SPI1
@@ -49,6 +50,21 @@
 #define MAX7456_NRST_GPIO_PERIPHERAL    RCC_APB2Periph_GPIOB
 #define MAX7456_NRST_GPIO               GPIOB
 #define MAX7456_NRST_PIN                Pin_2
+
+#define MAX7456_LOS_GPIO_PERIPHERAL     RCC_APB2Periph_GPIOC
+#define MAX7456_LOS_GPIO                GPIOC
+#define MAX7456_LOS_PIN                 Pin_13
+#define MAX7456_LOS_IO                  PC13
+
+#define MAX7456_VSYNC_GPIO_PERIPHERAL   RCC_APB2Periph_GPIOC
+#define MAX7456_VSYNC_GPIO              GPIOC
+#define MAX7456_VSYNC_PIN               Pin_14
+#define MAX7456_VSYNC_IO                PC14
+
+#define MAX7456_HSYNC_GPIO_PERIPHERAL   RCC_APB2Periph_GPIOC
+#define MAX7456_HSYNC_GPIO              GPIOC
+#define MAX7456_HSYNC_PIN               Pin_15
+#define MAX7456_HSYNC_IO                PC15
 
 #define EXTI_CALLBACK_HANDLER_COUNT 3 // LOS, HSYNC, VSYNC
 
@@ -70,7 +86,6 @@
 
 #define USE_EXTI
 #define USE_ADC
-//#define DEBUG_ADC_CHANNELS
 
 #define ADC_INSTANCE                ADC1
 #define ADC_ABP2_PERIPHERAL         RCC_APB2Periph_ADC1

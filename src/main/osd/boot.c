@@ -48,12 +48,14 @@
 #include "drivers/bus_spi.h"
 #include "drivers/flash_m25p16.h"
 #include "drivers/video_textscreen.h"
+#include "drivers/video.h"
 #include "drivers/usb_io.h"
 #include "drivers/exti.h"
 #include "drivers/io.h"
 
 #include "fc/rc_controls.h" // FIXME for throttle status, not needed by OSD.
 
+#include "osd/osd_element.h"
 #include "osd/osd.h"
 #include "osd/osd_serial.h"
 
